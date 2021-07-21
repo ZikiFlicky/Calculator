@@ -1,6 +1,8 @@
 # Calculator
 This is a simple command line calculator program written in C (C99).
 
+It can also be used as a library, if one imports just `calculator.c` and `calculator.h`.
+
 It currently supports basic operators like + - * / () % ^.
 
 This program was created because I wanted to think of an algorithm to do calculations, so I tried to think of my own one and came up with this.
