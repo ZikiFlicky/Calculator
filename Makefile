@@ -1,13 +1,14 @@
 CC=gcc
-CWARNINGS=-Wall
+CWARNINGS=
 CFLAGS=-std=c99 $(CWARNINGS)
 LINK=-lm
 
-OUT=calculator
+OUT_FILE=calculator
+OUT=-o $(OUT_FILE)
 RM=rm -f
 
-all: main.c calculator.c
-	$(CC) $(CFLAGS) -o $(OUT) $^ $(LINK)
+all: src/main.c src/calculator.c
+	$(CC) $(CFLAGS) $(OUT) $^ $(LINK)
 
 clear: $(OUT)
 	$(RM) $^
