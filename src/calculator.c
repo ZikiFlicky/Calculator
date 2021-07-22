@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 #include <math.h>
 
 /* TODO: add int support */
@@ -34,7 +35,7 @@ enum TokenType {
 /* a more complex token, that also has an optional value */
 struct Token {
     enum TokenType type;
-    double value;
+    CalculatorNumber value;
 };
 
 /* a helper struct that manages the tokenization stage */
@@ -63,7 +64,7 @@ enum NodeType {
 struct Node {
     enum NodeType type;
     union {
-        double number;
+        CalculatorNumber number;
         struct {
             struct Node *lhs, *rhs;
         } children;
@@ -86,9 +87,48 @@ static void tokenizer_append_token(struct Tokenizer *tokenizer, struct Token tok
     tokenizer->token_array[tokenizer->write_idx++] = token;
 }
 
+static bool tokenize_unsigned_number(struct Tokenizer *tokenizer, CalculatorNumber *number_out) {
+    size_t after_dot = 0;
+    if (!isdigit(tokenizer->stream[tokenizer->idx]))
+        return false;
+    number_out->is_int = true;
+    number_out->as_float = 0.f;
+    number_out->as_int = 0;
+    do {
+        number_out->as_float *= 10.f;
+        number_out->as_int *= 10;
+        number_out->as_float += tokenizer->stream[tokenizer->idx] - '0';
+        number_out->as_int += tokenizer->stream[tokenizer->idx] - '0';
+        // if you are a float, advance the dot position
+        if (!number_out->is_int)
+            ++after_dot;
+        ++tokenizer->idx;
+        if (tokenizer->stream[tokenizer->idx] == '.') {
+            // if had already been to a point, break, we should not tokenize it
+            if (!number_out->is_int)
+                break;
+            number_out->is_int = false;
+            ++tokenizer->idx;
+        }
+    } while (isdigit(tokenizer->stream[tokenizer->idx]));
+    // if the number is a float, you need to shift the digits beyond the dot `after_dot` times
+    if (!number_out->is_int) {
+        div_t div_result;
+        // until dividing by 10 has no remainder, the number shall be considered an int
+        number_out->is_int = true;
+        while (after_dot --> 0) {
+            div_result = div(number_out->as_int, 10);
+            // if the remainder isn't zero, it can be officially considered a float
+            if (div_result.rem != 0) number_out->is_int = false;
+            number_out->as_int = div_result.quot;
+            number_out->as_float /= 10;
+        }
+    }
+    return true;
+}
+
 static struct Token *tokenize(char *stream) {
     struct Tokenizer tokenizer;
-
     if (stream == NULL) return NULL;
     tokenizer.stream = stream;
     tokenizer.token_array = NULL;
@@ -133,16 +173,11 @@ static struct Token *tokenize(char *stream) {
             ++tokenizer.idx;
             break;
         default: {
-            char *end;
-            double n = strtod(&tokenizer.stream[tokenizer.idx], &end);
-
-            if (&tokenizer.stream[tokenizer.idx] == end) {
-                free(tokenizer.token_array);
-                CALCULATOR_ERROR("UNKNOWN IDENTIFIER");
-            }
-
-            tokenizer_append_token(&tokenizer, (struct Token) { TokenTypeNumber, n});
-            tokenizer.idx += end - &tokenizer.stream[tokenizer.idx];
+            struct Token token;
+            token.type = TokenTypeNumber;
+            if (!tokenize_unsigned_number(&tokenizer, &token.value))
+                CALCULATOR_ERROR("UNEXPECTED IDENTIFIER")
+            tokenizer_append_token(&tokenizer, token);
             break;
         }
         }
@@ -350,47 +385,97 @@ static struct Node *parse(struct Token *tokens) {
     return parser.write;
 }
 
-static double eval(struct Node *node) {
-    double res;
+static CalculatorNumber eval(struct Node *node) {
+    CalculatorNumber lhs, rhs, res;
     switch (node->type) {
     case NodeTypeNumber:
         res = node->value.number;
         break;
     case NodeTypePlus:
-        res = eval(node->value.children.lhs) + eval(node->value.children.rhs);
+        lhs = eval(node->value.children.lhs);
+        rhs = eval(node->value.children.rhs);
+        res.is_int = false;
+        if (lhs.is_int && rhs.is_int) {
+            res.is_int = true;
+            res.as_int = lhs.as_int + rhs.as_int;
+        }
+        res.as_float = lhs.as_float + rhs.as_float;
         break;
     case NodeTypeMin:
-        res = eval(node->value.children.lhs) - eval(node->value.children.rhs);
+        lhs = eval(node->value.children.lhs);
+        rhs = eval(node->value.children.rhs);
+        res.is_int = false;
+        if (lhs.is_int && rhs.is_int) {
+            res.is_int = true;
+            res.as_int = lhs.as_int - rhs.as_int;
+        }
+        res.as_float = lhs.as_float - rhs.as_float;
         break;
     case NodeTypeMul:
-        res = eval(node->value.children.lhs) * eval(node->value.children.rhs);
-        break;
-    case NodeTypeDiv:
-        res = eval(node->value.children.rhs);
-        if (res == 0.0f) {
-            free_node(node->value.children.lhs);
-            free(node);
-            CALCULATOR_ERROR("DIVISION BY ZERO");
+        lhs = eval(node->value.children.lhs);
+        rhs = eval(node->value.children.rhs);
+        res.is_int = false;
+        if (lhs.is_int && rhs.is_int) {
+            res.is_int = true;
+            res.as_int = lhs.as_int * rhs.as_int;
         }
-        res = eval(node->value.children.lhs) / res;
+        res.as_float = lhs.as_float * rhs.as_float;
         break;
+    case NodeTypeDiv: {
+        div_t div_result;
+        lhs = eval(node->value.children.lhs);
+        rhs = eval(node->value.children.rhs);
+        if (rhs.is_int ? rhs.as_int == 0 : rhs.as_float == 0.0f)
+            CALCULATOR_ERROR("DIVISION BY ZERO")
+        res.is_int = false;
+        if (lhs.is_int && rhs.is_int) {
+            div_result = div(lhs.as_int, rhs.as_int); 
+            if (div_result.rem == 0) {
+                res.is_int = true;
+                res.as_int = div_result.quot;
+            }
+        }
+        res.as_float = lhs.as_float / rhs.as_float;
+        break;
+    }
     case NodeTypeMod:
-        res = eval(node->value.children.rhs);
-        if (res == 0.0f) {
-            free_node(node->value.children.lhs);
-            free(node);
-            CALCULATOR_ERROR("DIVISION BY ZERO");
+        lhs = eval(node->value.children.lhs);
+        rhs = eval(node->value.children.rhs);
+        res.is_int = false;
+        if (rhs.is_int ? rhs.as_int == 0 : rhs.as_float == 0.0f)
+            CALCULATOR_ERROR("DIVISION BY ZERO")
+        if (lhs.is_int && rhs.is_int) {
+            res.is_int = true;
+            res.as_int = lhs.as_int % rhs.as_int;
         }
-        res = fmod(eval(node->value.children.lhs), res);
+        res.as_float = fmod(lhs.as_int, rhs.as_int);
         break;
     case NodeTypePow:
-        res = powf(eval(node->value.children.lhs), eval(node->value.children.rhs));
+        lhs = eval(node->value.children.lhs);
+        rhs = eval(node->value.children.rhs);
+        // 0^-1 is an error
+        if ((lhs.is_int ? lhs.as_int == 0 : lhs.as_float == 0.0f) && rhs.as_float < 0)
+            CALCULATOR_ERROR("DIVISION BY ZERO")
+        res.is_int = false;
+        if (lhs.is_int && rhs.is_int) {
+            // calculate a power only if it's positive, if it isn't calculate it only as a float
+            if (rhs.as_int >= 0) {
+                res.is_int = true;
+                res.as_int = pow(lhs.as_int, rhs.as_int);
+            }
+        }
+        res.as_float = powf(lhs.as_float, rhs.as_float);
         break;
     case NodeTypeParen:
         res = eval(node->value.in_paren);
         break;
     case NodeTypeNeg:
-        res = -eval(node->value.to_negative);
+        res = eval(node->value.to_negative);
+        res = (CalculatorNumber) {
+            .as_float = -res.as_float,
+            .as_int = -res.as_int,
+            .is_int = res.is_int
+        };
         break;
     }
     // free the node
@@ -401,7 +486,10 @@ static double eval(struct Node *node) {
 static void print_ast(struct Node *node) {
     switch (node->type) {
     case NodeTypeNumber:
-        printf("%f", node->value.number);
+        if (node->value.number.is_int)
+            printf("%d", node->value.number.as_int);
+        else
+            printf("%f", node->value.number.as_float);
         break;
     case NodeTypePlus:
         print_ast(node->value.children.lhs);
@@ -445,17 +533,29 @@ static void print_ast(struct Node *node) {
     }
 }
 
-double calculate(char *stream) {
+CalculatorNumber calculate(char *stream) {
     struct Token *tokens;
     struct Node *ast;
-    if ((tokens = tokenize(stream)) == NULL)
-        return 0.0f;
-    if ((ast = parse(tokens)) == NULL)
-        return 0.0f;
+    if ((tokens = tokenize(stream)) == NULL) {
+        return (CalculatorNumber) {
+            .as_float = 0.0f,
+            .as_int = 0,
+            .is_int = true
+        };
+    }
+    if ((ast = parse(tokens)) == NULL) {
+        return (CalculatorNumber) {
+            .as_float = 0.0f,
+            .as_int = 0,
+            .is_int = true
+        };
+    }
+
 #ifdef CALCULATOR_DEBUG
     print_ast(ast);
     printf("\n");
 #endif
+
     return eval(ast);
 }
 
