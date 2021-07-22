@@ -8,9 +8,7 @@
 #include <ctype.h>
 #include <math.h>
 
-/* TODO: add int support */
-
-#define CALCULATOR_DEBUG
+// #define CALCULATOR_DEBUG
 
 #define CALCULATOR_ERROR(message) \
     { \
