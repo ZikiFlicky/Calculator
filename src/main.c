@@ -10,6 +10,7 @@ static void print_help(void) {
 }
 
 int main(int argc, char **argv) {
+    CalculatorNumber result;
     --argc; ++argv;
     if (argc == 0) {
         print_help();
@@ -18,7 +19,10 @@ int main(int argc, char **argv) {
         fprintf(stderr, "too many parameters to the program!\n");
         return 1;
     }
-    printf("%f\n", calculate(argv[0]));
+    result = calculate(argv[0]);
+    if (result.is_int)
+        printf("%d\n", result.as_int);
+    else
+        printf("%f\n", result.as_float);
     return 0;
 }
-
