@@ -9,6 +9,8 @@ typedef struct {
     double as_float;
 } CalculatorNumber;
 
+void print_calculator_number(CalculatorNumber *number);
+
 CalculatorNumber calculate(char *stream);
 
 #endif /* CALCULATOR_CALCULATOR_H */

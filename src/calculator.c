@@ -481,13 +481,17 @@ static CalculatorNumber eval(struct Node *node) {
     return res;
 }
 
+void print_calculator_number(CalculatorNumber *number) {
+    if (number->is_int)
+        printf("%d", number->as_int);
+    else
+        printf("%f", number->as_float);
+}
+
 static void print_ast(struct Node *node) {
     switch (node->type) {
     case NodeTypeNumber:
-        if (node->value.number.is_int)
-            printf("%d", node->value.number.as_int);
-        else
-            printf("%f", node->value.number.as_float);
+        print_calculator_number(&node->value.number);
         break;
     case NodeTypePlus:
         print_ast(node->value.children.lhs);
@@ -556,4 +560,3 @@ CalculatorNumber calculate(char *stream) {
 
     return eval(ast);
 }
-
