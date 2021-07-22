@@ -8,10 +8,23 @@ It currently supports basic operators like + - * / () % ^.
 This program was created because I wanted to think of an algorithm to do calculations, so I tried to think of my own one and came up with this.
 
 ## Build instructions
-* Open the terminal, `cd` into the program's folder.
+---
+## Linux or any other unix-like operating systems
+### Dependencies
+* GNU make
+* GCC
+### Instructions
+* `cd` into the program's directory
 * Type `make`.
+* Type `./calculator` to run the program
 
-Now you can run the calculator by typing `./calculator` (if you are on a unix-like operating system).
+## Windows
+### Dependencies
+* Visual Studio 2019
+### Instructions
+* `cd` into the program's directory
+* Type `.\make`.
+* Type `.\calculator` to run the program
 
 ## How it works
 This calculator works by moving linearly on an array of tokens and creating a tree of nodes, that are later recursively evaluated, and at the end return a number.
