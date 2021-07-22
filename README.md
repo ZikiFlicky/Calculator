@@ -29,6 +29,3 @@ This calculator works by moving linearly on an array of tokens and creating a tr
       (3)   (4)
 ```
 It will later be evaluated recursivaly to finally return 158.
-
-## Features I want to add
-* Integer support, to allow more precise calculations
